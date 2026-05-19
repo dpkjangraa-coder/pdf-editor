@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PDF Editor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#eef2f7;min-height:100vh}
+
+#landing{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px 20px;text-align:center}
+#landing h1{font-size:42px;font-weight:700;color:#1a1a2e;margin-bottom:14px}
+#landing p{font-size:16px;color:#666;max-width:520px;line-height:1.6;margin-bottom:40px}
+#upload-zone{border:2px dashed #c5cfe0;border-radius:16px;padding:60px 40px;background:#fff;width:100%;max-width:600px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:16px}
+#upload-zone:hover{border-color:#4361ee;background:#f5f7ff}
+#upload-zone .icon{font-size:56px;opacity:0.7}
+#upload-btn{background:#1a1a2e;color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:15px;cursor:pointer;transition:background 0.2s}
+#upload-btn:hover{background:#4361ee}
+#upload-zone p{font-size:13px;color:#999}
+
+#editor{display:none;flex-direction:column;min-height:100vh}
+#editor-header{background:#fff;border-bottom:1px solid #e0e5f0;padding:10px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+#editor-header .logo{font-size:17px;font-weight:700;color:#1a1a2e}
+.hbtn{padding:7px 14px;font-size:13px;border:1px solid #dde3ef;border-radius:8px;cursor:pointer;background:#fff;color:#444;transition:all 0.15s;white-space:nowrap}
+.hbtn:hover{background:#f0f3ff;border-color:#4361ee;color:#4361ee}
+.hbtn.success{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+.hbtn.success:hover{background:#4361ee;border-color:#4361ee}
+.hbtn.active{background:#4361ee;color:#fff;border-color:#4361ee}
+#status-bar{font-size:12px;padding:5px 12px;border-radius:20px;background:#f0f3ff;color:#4361ee}
+
+#editor-body{flex:1;padding:30px;background:#eef2f7;display:flex;flex-direction:column;align-items:center;gap:0}
+
+.page-container{display:flex;flex-direction:column;align-items:center;margin-bottom:30px}
+.page-controls{display:flex;align-items:center;gap:4px;margin-bottom:8px;background:#fff;border:1px solid #dde3ef;border-radius:10px;padding:6px 10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-wrap:wrap}
+.page-num{font-size:13px;color:#4361ee;font-weight:600;padding:0 6px;min-width:20px;text-align:center}
+.pc-btn{height:32px;padding:0 12px;border:1px solid #dde3ef;border-radius:7px;cursor:pointer;background:#fff;color:#555;font-size:13px;display:flex;align-items:center;justify-content:center;gap:5px;transition:all 0.15s;white-space:nowrap}
+.pc-btn:hover{background:#f0f3ff;border-color:#4361ee;color:#4361ee}
+.pc-btn.del:hover{background:#fde8e8;border-color:#e24b4a;color:#e24b4a}
+.pc-btn.insert{background:#f0f3ff;color:#4361ee;border-color:#c5d0f0}
+.pc-btn.insert:hover{background:#4361ee;color:#fff;border-color:#4361ee}
+.pc-divider{width:1px;height:22px;background:#dde3ef;margin:0 2px}
+
+.page-wrap{position:relative;display:inline-block;box-shadow:0 8px 40px rgba(0,0,0,0.12);border-radius:4px;background:#fff}
+.page-wrap img{display:block;border-radius:4px}
+
+/* BUG FIX: edit-layer pointer-events managed per-element, not on layer */
+.edit-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+
+.edit-box{position:absolute;pointer-events:all;cursor:text;border:none;background:transparent;outline:none;padding:0 2px;margin:0;line-height:1.2;white-space:nowrap;font-family:Arial;color:inherit;overflow:hidden}
+.edit-box:hover{border:1.5px dashed #4361ee;background:rgba(67,97,238,0.06);border-radius:3px;z-index:10}
+.edit-box:focus{border:1.5px solid #4361ee;background:#fff;z-index:20;overflow:visible;width:auto !important;min-width:30px;border-radius:3px}
+
+.img-overlay{position:absolute;cursor:move;border:2px solid transparent;user-select:none;z-index:5;pointer-events:all}
+.img-overlay:hover{border:2px dashed #4361ee}
+.img-overlay img{width:100%;height:100%;display:block;pointer-events:none}
+.resize-handle{position:absolute;width:10px;height:10px;background:#4361ee;border:2px solid #fff;border-radius:2px}
+.resize-handle.br{bottom:-5px;right:-5px;cursor:se-resize}
+.resize-handle.bl{bottom:-5px;left:-5px;cursor:sw-resize}
+.resize-handle.tr{top:-5px;right:-5px;cursor:ne-resize}
+.resize-handle.tl{top:-5px;left:-5px;cursor:nw-resize}
+.del-handle{position:absolute;top:-12px;right:-12px;width:22px;height:22px;background:#e24b4a;color:#fff;border:none;border-radius:50%;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:10}
+.del-handle:hover{background:#c0392b}
+
+.custom-textbox{position:absolute;cursor:move;z-index:6;min-width:80px;min-height:30px;user-select:none;pointer-events:all}
+.tb-content{outline:none;min-width:80px;min-height:24px;padding:4px 6px;word-break:break-word;white-space:pre-wrap;cursor:text}
+.tb-controls{position:absolute;top:-54px;left:0;display:flex;gap:3px;background:#fff;border:1px solid #dde3ef;border-radius:8px;padding:4px 6px;box-shadow:0 2px 10px rgba(0,0,0,0.1);opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:200;flex-wrap:wrap;min-width:320px}
+.tb-controls.visible{opacity:1;pointer-events:all}
+.tb-del{position:absolute;top:-10px;right:-10px;width:20px;height:20px;background:#e24b4a;color:#fff;border:none;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center}
+.tb-del:hover{background:#c0392b}
+.tb-resize{position:absolute;bottom:-5px;right:-5px;width:12px;height:12px;background:#4361ee;border:2px solid #fff;border-radius:2px;cursor:se-resize}
+.tc-btn{height:24px;min-width:24px;padding:0 6px;border:1px solid #dde3ef;border-radius:5px;cursor:pointer;background:#fff;color:#444;font-size:12px;display:flex;align-items:center;justify-content:center}
+.tc-btn:hover{background:#f0f3ff;border-color:#4361ee}
+.tc-btn.on{background:#4361ee;color:#fff;border-color:#4361ee}
+.tc-divider{width:1px;height:18px;background:#dde3ef;margin:0 2px}
+.tc-select{height:24px;font-size:11px;border:1px solid #dde3ef;border-radius:5px;padding:0 4px;cursor:pointer;max-width:90px}
+.tc-color{width:24px;height:24px;border:1px solid #dde3ef;border-radius:5px;cursor:pointer;padding:0}
+
+.shape-overlay{position:absolute;cursor:move;z-index:5;pointer-events:all}
+.shape-del{position:absolute;top:-12px;right:-12px;width:22px;height:22px;background:#e24b4a;color:#fff;border:none;border-radius:50%;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;z-index:10}
+.shape-del:hover{background:#c0392b}
+
+.dropdown{position:relative;display:inline-block}
+.dropdown-menu{display:none;position:absolute;top:110%;left:0;background:#fff;border:1px solid #dde3ef;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.1);z-index:999;min-width:150px;padding:4px 0}
+.dropdown-menu.open{display:block}
+.dropdown-item{padding:8px 16px;font-size:13px;cursor:pointer;color:#444;display:flex;align-items:center;gap:8px}
+.dropdown-item:hover{background:#f0f3ff;color:#4361ee}
+</style>
+</head>
+<body>
+
+<div id="landing">
+  <h1>Your online PDF editor</h1>
+  <p>Edit PDFs with ease — click any text to edit, add images, shapes, delete pages, and download instantly.</p>
+  <div id="upload-zone" onclick="document.getElementById('pdf-in').click()"
+    ondragover="event.preventDefault();this.style.borderColor='#4361ee'"
+    ondragleave="this.style.borderColor='#c5cfe0'"
+    ondrop="handleDrop(event)">
+    <div class="icon">📄</div>
+    <button id="upload-btn" onclick="event.stopPropagation();document.getElementById('pdf-in').click()">📁 Upload your PDF</button>
+    <p>or drop your file here</p>
+  </div>
+  <input type="file" id="pdf-in" accept="application/pdf" style="display:none" onchange="loadPDF(this)">
+</div>
+
+<div id="editor">
+  <div id="editor-header">
+    <div class="logo">📝 PDF Editor</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="hbtn" onclick="document.getElementById('pdf-in2').click()">📂 New PDF</button>
+      <input type="file" id="pdf-in2" accept="application/pdf" style="display:none" onchange="loadPDF(this)">
+      <button class="hbtn" id="txt-add-btn" onclick="startTextAdd()">🔤 Add Text</button>
+      <button class="hbtn" onclick="document.getElementById('img-in').click()">🖼️ Add Image</button>
+      <input type="file" id="img-in" accept="image/*" style="display:none" onchange="startImageAdd(this)">
+
+      <div class="dropdown" id="shapes-dd">
+        <button class="hbtn" onclick="toggleShapesMenu()">⬡ Shapes ▾</button>
+        <div class="dropdown-menu" id="shapes-menu">
+          <div class="dropdown-item" onclick="startShape('ellipse')">○ Ellipse</div>
+          <div class="dropdown-item" onclick="startShape('rectangle')">□ Rectangle</div>
+          <div class="dropdown-item" onclick="startShape('line')">╲ Line</div>
+          <div class="dropdown-item" onclick="startShape('arrow')">↘ Arrow</div>
+        </div>
+      </div>
+
+      <input type="color" id="shape-color" value="#e24b4a" title="Shape Color" style="width:30px;height:30px;border:1px solid #dde3ef;border-radius:6px;cursor:pointer;padding:1px">
+      <select id="shape-size" style="height:30px;font-size:12px;border:1px solid #dde3ef;border-radius:6px;padding:0 6px">
+        <option value="2">Thin</option>
+        <option value="4" selected>Normal</option>
+        <option value="7">Thick</option>
+        <option value="12">Extra</option>
+      </select>
+
+      <button class="hbtn" onclick="undoAction()" title="Ctrl+Z">↩ Undo</button>
+      <button class="hbtn success" onclick="downloadPDF()">⬇ Download PDF</button>
+      <span id="status-bar"></span>
+    </div>
+  </div>
+  <div id="editor-body"></div>
+</div>
+
+<div id="img-cursor" style="display:none;position:fixed;pointer-events:none;z-index:9999;opacity:0.7">
+  <img id="img-cursor-img" style="width:120px;height:auto;border:2px dashed #4361ee;border-radius:4px">
+  <div style="text-align:center;font-size:11px;color:#4361ee;margin-top:4px">Click karein jahan rakhna hai</div>
+</div>
+<div id="txt-cursor" style="display:none;position:fixed;pointer-events:none;z-index:9999;opacity:0.85">
+  <div style="background:#4361ee;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px">🔤 Click karein jahan text box rakhna hai</div>
+</div>
+<div id="shape-cursor" style="display:none;position:fixed;pointer-events:none;z-index:9999;opacity:0.85">
+  <div style="background:#4361ee;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px">✏️ Drag karein shape banane ke liye</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfDoc=null,totalPages=0;
+let originalPDFBase64='';
+let allEdits={};
+let pageBlocks={};
+let pageAngles={};
+let pageImages={};
+let pageTextBoxes={};
+let pageShapes={};
+let undoStack=[];
+let addingImage=false,pendingImgSrc=null,pendingImgNW=0,pendingImgNH=0;
+let addingText=false;
+let addingShape=false,currentShapeType='rectangle';
+
+const FONTS=['Arial','Times New Roman','Courier New','Georgia','Verdana','Comic Sans MS','Impact','Trebuchet MS'];
+
+function setStatus(msg,color){
+  const el=document.getElementById('status-bar');
+  el.textContent=msg;
+  el.style.background=color==='green'?'#e6f9f0':color==='red'?'#fde8e8':'#f0f3ff';
+  el.style.color=color==='green'?'#1a7a4a':color==='red'?'#c0392b':'#4361ee';
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').style.borderColor='#c5cfe0';
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type==='application/pdf') readFile(f);
+}
+function loadPDF(input){if(input.files[0]) readFile(input.files[0]);}
+function readFile(f){
+  const r=new FileReader();
+  r.onload=async ev=>{
+    const arr=ev.target.result;
+    const bytes=new Uint8Array(arr);
+    let b64='';const chunk=1024;
+    for(let i=0;i<bytes.length;i+=chunk){b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));}
+    originalPDFBase64=btoa(b64);
+    pdfDoc=await pdfjsLib.getDocument({data:arr}).promise;
+    totalPages=pdfDoc.numPages;
+    allEdits={};pageBlocks={};pageAngles={};pageImages={};pageTextBoxes={};pageShapes={};undoStack=[];
+    document.getElementById('landing').style.display='none';
+    document.getElementById('editor').style.display='flex';
+    await renderAllPages();
+  };
+  r.readAsArrayBuffer(f);
+}
+
+async function renderAllPages(){
+  const body=document.getElementById('editor-body');
+  body.innerHTML='';
+  setStatus('Loading PDF...','blue');
+  for(let p=1;p<=totalPages;p++) await renderSinglePage(p,body);
+  setStatus('✅ Click any text to edit','green');
+}
+
+async function renderSinglePage(pageNum,container){
+  const pc=document.createElement('div');
+  pc.className='page-container';pc.id='pc-'+pageNum;
+  const ctrl=document.createElement('div');
+  ctrl.className='page-controls';
+  ctrl.innerHTML=`
+    <span class="page-num">${pageNum}</span>
+    <div class="pc-divider"></div>
+    <button class="pc-btn" onclick="rotatePage(${pageNum},-90)">↺ Rotate Left</button>
+    <button class="pc-btn" onclick="rotatePage(${pageNum},90)">↻ Rotate Right</button>
+    <div class="pc-divider"></div>
+    <button class="pc-btn del" onclick="deletePage(${pageNum})">🗑️ Delete</button>
+    <div class="pc-divider"></div>
+    <button class="pc-btn insert" onclick="insertPageAfter(${pageNum})">+ Insert page here</button>
+  `;
+  pc.appendChild(ctrl);
+  const pw=document.createElement('div');
+  pw.className='page-wrap';pw.id='pw-'+pageNum;
+  const bgImg=document.createElement('img');bgImg.id='img-'+pageNum;
+  const layer=document.createElement('div');
+  layer.className='edit-layer';layer.id='layer-'+pageNum;
+  // BUG FIX: layer pointer-events stays none — individual elements handle their own
+  layer.style.pointerEvents='none';
+  pw.appendChild(bgImg);pw.appendChild(layer);
+  pc.appendChild(pw);
+  container.appendChild(pc);
+
+  // Shape drawing
+  pw.addEventListener('mousedown',e=>{
+    if(!addingShape)return;
+    e.preventDefault();
+    const rect=pw.getBoundingClientRect();
+    const startX=e.clientX-rect.left;
+    const startY=e.clientY-rect.top;
+    const color=document.getElementById('shape-color').value;
+    const strokeW=parseInt(document.getElementById('shape-size').value);
+
+    const preview=document.createElement('div');
+    preview.style.cssText=`position:absolute;pointer-events:none;z-index:99;border:2px dashed ${color};left:${startX}px;top:${startY}px;`;
+    layer.appendChild(preview);
+
+    function onMove(e){
+      const cx=e.clientX-rect.left;
+      const cy=e.clientY-rect.top;
+      const x=Math.min(startX,cx),y=Math.min(startY,cy);
+      const w=Math.abs(cx-startX),h=Math.abs(cy-startY);
+      preview.style.left=x+'px';preview.style.top=y+'px';
+      preview.style.width=w+'px';preview.style.height=h+'px';
+    }
+    function onUp(e){
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+      preview.remove();
+      const cx=e.clientX-rect.left;
+      const cy=e.clientY-rect.top;
+      const x=Math.min(startX,cx),y=Math.min(startY,cy);
+      const w=Math.abs(cx-startX),h=Math.abs(cy-startY);
+      if(w<5||h<5){stopShapeMode();return;}
+      const obj={type:currentShapeType,x,y,w,h,color,strokeW,rotate:0};
+      if(!pageShapes[pageNum])pageShapes[pageNum]=[];
+      pageShapes[pageNum].push(obj);
+      undoStack.push({action:'addShape',pageNum,obj});
+      createShapeOnPage(pageNum,layer,obj);
+      stopShapeMode();
+      setStatus('✅ Shape add ho gayi!','green');
+    }
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+
+  pw.addEventListener('click',e=>{
+    if(addingShape)return;
+    const rect=pw.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const y=e.clientY-rect.top;
+    if(addingImage){placeImage(pageNum,x,y,pw,layer);stopImageMode();}
+    else if(addingText){placeTextBox(pageNum,x,y,layer);stopTextMode();}
+  });
+
+  pw.addEventListener('mousemove',e=>{
+    const cur=addingImage?'img-cursor':addingText?'txt-cursor':addingShape?'shape-cursor':null;
+    if(cur){
+      document.getElementById(cur).style.left=(e.clientX+10)+'px';
+      document.getElementById(cur).style.top=(e.clientY+10)+'px';
+    }
+  });
+
+  try{
+    const angle=pageAngles[pageNum]||0;
+    const imgRes=await fetch('/get-page-image',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pdfBase64:originalPDFBase64,pageNum,angle})});
+    const imgData=await imgRes.json();
+    if(imgData.error)throw new Error(imgData.error);
+    bgImg.src='data:image/png;base64,'+imgData.image;
+    await new Promise(resolve=>{if(bgImg.complete&&bgImg.naturalWidth>0)resolve();else bgImg.onload=resolve;});
+
+    // BUG FIX: pass angle to get-text so blocks align with rotated page
+    const textRes=await fetch('/get-text',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pdfBase64:originalPDFBase64,pageNum,angle})});
+    const textData=await textRes.json();
+    const blocks=textData.blocks||[];
+    pageBlocks[pageNum]=blocks;
+
+    const pdfW=textData.pageWidth||imgData.pageWidth;
+    const pdfH=textData.pageHeight||imgData.pageHeight;
+    const displayW=bgImg.clientWidth,displayH=bgImg.clientHeight;
+    const scaleX=displayW/pdfW,scaleY=displayH/pdfH;
+
+    blocks.forEach((b,idx)=>{
+      const x=b.x*scaleX,y=b.y*scaleY;
+      const w=(b.x1-b.x)*scaleX,h=(b.y1-b.y)*scaleY;
+      const fs=b.size*scaleY;
+      const savedVal=allEdits[pageNum]&&allEdits[pageNum][idx]!==undefined?allEdits[pageNum][idx]:null;
+      const box=document.createElement('input');
+      box.type='text';box.className='edit-box';
+      box.value=savedVal!==null?savedVal:b.text;
+      box.dataset.orig=b.text;box.dataset.idx=idx;box.dataset.w=w;box.dataset.page=pageNum;
+      box.style.left=x+'px';box.style.top=(y+1)+'px';
+      box.style.width=Math.max(w+2,20)+'px';box.style.height=Math.max(h-2,8)+'px';
+      box.style.fontSize=fs+'px';box.style.fontWeight=b.bold?'bold':'normal';
+      const rc=Math.round(b.color[0]*255),gc=Math.round(b.color[1]*255),bc=Math.round(b.color[2]*255);
+      box.style.color='rgb('+rc+','+gc+','+bc+')';
+      box.addEventListener('blur',()=>{
+        box.style.width=Math.max(parseFloat(box.dataset.w)+2,20)+'px';
+        box.style.overflow='hidden';
+        allEdits[pageNum]=allEdits[pageNum]||{};
+        allEdits[pageNum][idx]=box.value;
+      });
+      layer.appendChild(box);
+    });
+
+    if(pageImages[pageNum]) pageImages[pageNum].forEach(o=>createImageOverlay(o.src,o.x,o.y,o.w,o.h,pageNum,layer,o));
+    if(pageTextBoxes[pageNum]) pageTextBoxes[pageNum].forEach(o=>createTextBoxOverlay(o,pageNum,layer));
+    if(pageShapes[pageNum]) pageShapes[pageNum].forEach(o=>createShapeOnPage(pageNum,layer,o));
+  }catch(e){console.error(e);}
+}
+
+// ===== SHAPES =====
+function toggleShapesMenu(){
+  document.getElementById('shapes-menu').classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#shapes-dd')) document.getElementById('shapes-menu').classList.remove('open');
+});
+function startShape(type){
+  currentShapeType=type;
+  addingShape=true;addingImage=false;addingText=false;
+  document.getElementById('shapes-menu').classList.remove('open');
+  document.getElementById('shape-cursor').style.display='block';
+  document.body.style.cursor='crosshair';
+  setStatus('Page pe drag karein — '+type+' banane ke liye — ESC se cancel','blue');
+}
+function stopShapeMode(){
+  addingShape=false;
+  document.getElementById('shape-cursor').style.display='none';
+  document.body.style.cursor='default';
+}
+
+// BUG FIX: SVG size accounts for diagonal lines so they don't clip
+function makeSVGShape(type,w,h,color,sw){
+  const aw=Math.abs(w),ah=Math.abs(h);
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width',aw);
+  svg.setAttribute('height',ah);
+  svg.style.overflow='visible';
+  svg.style.display='block';
+
+  if(type==='rectangle'){
+    const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',sw/2);r.setAttribute('y',sw/2);
+    r.setAttribute('width',Math.max(1,aw-sw));
+    r.setAttribute('height',Math.max(1,ah-sw));
+    r.setAttribute('fill','none');r.setAttribute('stroke',color);r.setAttribute('stroke-width',sw);
+    svg.appendChild(r);
+  } else if(type==='ellipse'){
+    const el=document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    el.setAttribute('cx',aw/2);el.setAttribute('cy',ah/2);
+    el.setAttribute('rx',Math.max(1,(aw-sw)/2));
+    el.setAttribute('ry',Math.max(1,(ah-sw)/2));
+    el.setAttribute('fill','none');el.setAttribute('stroke',color);el.setAttribute('stroke-width',sw);
+    svg.appendChild(el);
+  } else if(type==='line'){
+    // BUG FIX: line goes from 0,0 to w,h — SVG needs to be big enough
+    svg.setAttribute('width',aw||1);
+    svg.setAttribute('height',ah||1);
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',0);l.setAttribute('y1',0);
+    l.setAttribute('x2',aw);l.setAttribute('y2',ah);
+    l.setAttribute('stroke',color);l.setAttribute('stroke-width',sw);
+    l.setAttribute('stroke-linecap','round');
+    svg.appendChild(l);
+  } else if(type==='arrow'){
+    const id='arr'+Math.random().toString(36).slice(2);
+    const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+    const marker=document.createElementNS('http://www.w3.org/2000/svg','marker');
+    marker.setAttribute('id',id);marker.setAttribute('markerWidth','10');
+    marker.setAttribute('markerHeight','7');marker.setAttribute('refX','9');
+    marker.setAttribute('refY','3.5');marker.setAttribute('orient','auto');
+    const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    poly.setAttribute('points','0 0, 10 3.5, 0 7');poly.setAttribute('fill',color);
+    marker.appendChild(poly);defs.appendChild(marker);svg.appendChild(defs);
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',0);l.setAttribute('y1',0);
+    l.setAttribute('x2',aw);l.setAttribute('y2',ah);
+    l.setAttribute('stroke',color);l.setAttribute('stroke-width',sw);
+    l.setAttribute('marker-end','url(#'+id+')');
+    svg.appendChild(l);
+  }
+  return svg;
+}
+
+function createShapeOnPage(pageNum,layer,obj){
+  const wrap=document.createElement('div');
+  wrap.className='shape-overlay';
+  wrap.style.left=obj.x+'px';wrap.style.top=obj.y+'px';
+  wrap.style.width=obj.w+'px';wrap.style.height=obj.h+'px';
+  wrap.style.transformOrigin='center center';
+  wrap.style.transform=`rotate(${obj.rotate||0}deg)`;
+
+  const svg=makeSVGShape(obj.type,obj.w,obj.h,obj.color,obj.strokeW);
+  wrap.appendChild(svg);
+
+  // Rotate handle
+  const rotHandle=document.createElement('div');
+  rotHandle.style.cssText=`position:absolute;top:-30px;left:50%;transform:translateX(-50%);
+    width:22px;height:22px;background:#4361ee;color:#fff;border-radius:50%;
+    cursor:grab;display:flex;align-items:center;justify-content:center;font-size:14px;
+    user-select:none;z-index:20;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);`;
+  rotHandle.textContent='↻';
+  rotHandle.title='Drag karke rotate karein';
+  rotHandle.addEventListener('mousedown',e=>{
+    e.stopPropagation();e.preventDefault();
+    rotHandle.style.cursor='grabbing';
+    const rect=wrap.getBoundingClientRect();
+    const cx=rect.left+rect.width/2;
+    const cy=rect.top+rect.height/2;
+    function onMove(e){
+      const dx=e.clientX-cx,dy=e.clientY-cy;
+      obj.rotate=Math.round(Math.atan2(dy,dx)*(180/Math.PI)+90);
+      wrap.style.transform=`rotate(${obj.rotate}deg)`;
+    }
+    function onUp(){
+      rotHandle.style.cursor='grab';
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+    }
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+  wrap.appendChild(rotHandle);
+
+  // Delete
+  const delBtn=document.createElement('button');
+  delBtn.className='shape-del';delBtn.textContent='✕';
+  delBtn.onclick=e=>{
+    e.stopPropagation();
+    // BUG FIX: push deleteShape so undo can restore it
+    undoStack.push({action:'deleteShape',pageNum,obj});
+    wrap.remove();
+    pageShapes[pageNum]=pageShapes[pageNum].filter(s=>s!==obj);
+  };
+  wrap.appendChild(delBtn);
+
+  // Drag
+  wrap.addEventListener('mousedown',e=>{
+    if(e.target===delBtn||e.target===rotHandle)return;
+    e.preventDefault();
+    const sx=e.clientX,sy=e.clientY;
+    const sl=parseInt(wrap.style.left),st=parseInt(wrap.style.top);
+    function onMove(e){
+      wrap.style.left=(sl+(e.clientX-sx))+'px';
+      wrap.style.top=(st+(e.clientY-sy))+'px';
+      obj.x=parseInt(wrap.style.left);obj.y=parseInt(wrap.style.top);
+    }
+    function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  });
+
+  layer.appendChild(wrap);
+  return wrap;
+}
+
+// ===== UNDO =====
+function undoAction(){
+  if(!undoStack.length){setStatus('Kuch undo karne ko nahi hai','blue');return;}
+  const last=undoStack.pop();
+
+  if(last.action==='addShape'){
+    pageShapes[last.pageNum]=(pageShapes[last.pageNum]||[]).filter(s=>s!==last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer){
+      const all=layer.querySelectorAll('.shape-overlay');
+      // find matching element by obj reference via data
+      let removed=false;
+      all.forEach(el=>{if(!removed&&el._shapeObj===last.obj){el.remove();removed=true;}});
+      if(!removed&&all.length) all[all.length-1].remove();
+    }
+    setStatus('↩ Shape undo','blue');
+
+  } else if(last.action==='deleteShape'){
+    if(!pageShapes[last.pageNum]) pageShapes[last.pageNum]=[];
+    pageShapes[last.pageNum].push(last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer) createShapeOnPage(last.pageNum,layer,last.obj);
+    setStatus('↩ Shape wapas aa gayi','blue');
+
+  } else if(last.action==='addImage'){
+    pageImages[last.pageNum]=(pageImages[last.pageNum]||[]).filter(o=>o!==last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer){
+      const all=layer.querySelectorAll('.img-overlay');
+      let removed=false;
+      all.forEach(el=>{if(!removed&&el._imgObj===last.obj){el.remove();removed=true;}});
+      if(!removed&&all.length) all[all.length-1].remove();
+    }
+    setStatus('↩ Image undo','blue');
+
+  } else if(last.action==='deleteImage'){
+    if(!pageImages[last.pageNum]) pageImages[last.pageNum]=[];
+    pageImages[last.pageNum].push(last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer) createImageOverlay(last.obj.src,last.obj.x,last.obj.y,last.obj.w,last.obj.h,last.pageNum,layer,last.obj);
+    setStatus('↩ Image wapas aa gayi','blue');
+
+  } else if(last.action==='addTextBox'){
+    pageTextBoxes[last.pageNum]=(pageTextBoxes[last.pageNum]||[]).filter(o=>o!==last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer){
+      const all=layer.querySelectorAll('.custom-textbox');
+      let removed=false;
+      all.forEach(el=>{if(!removed&&el._tbObj===last.obj){el.remove();removed=true;}});
+      if(!removed&&all.length) all[all.length-1].remove();
+    }
+    setStatus('↩ Text box undo','blue');
+
+  } else if(last.action==='deleteTextBox'){
+    // BUG FIX: deleteTextBox was missing from undo handler
+    if(!pageTextBoxes[last.pageNum]) pageTextBoxes[last.pageNum]=[];
+    pageTextBoxes[last.pageNum].push(last.obj);
+    const layer=document.getElementById('layer-'+last.pageNum);
+    if(layer) createTextBoxOverlay(last.obj,last.pageNum,layer);
+    setStatus('↩ Text box wapas aa gayi','blue');
+  }
+}
+
+// ===== TEXT BOX =====
+function startTextAdd(){
+  addingText=true;addingImage=false;addingShape=false;
+  document.getElementById('txt-cursor').style.display='block';
+  document.body.style.cursor='crosshair';
+  document.getElementById('txt-add-btn').classList.add('active');
+  setStatus('Page pe click karein jahan text box rakhna hai — ESC se cancel','blue');
+}
+function stopTextMode(){
+  addingText=false;
+  document.getElementById('txt-cursor').style.display='none';
+  document.body.style.cursor='default';
+  document.getElementById('txt-add-btn').classList.remove('active');
+}
+
+function placeTextBox(pageNum,x,y,layer){
+  const obj={x,y,w:200,h:40,text:'Text yahan likhein',fontSize:16,fontFamily:'Arial',bold:false,italic:false,underline:false,color:'#000000',bgColor:'transparent'};
+  if(!pageTextBoxes[pageNum]) pageTextBoxes[pageNum]=[];
+  pageTextBoxes[pageNum].push(obj);
+  undoStack.push({action:'addTextBox',pageNum,obj});
+  createTextBoxOverlay(obj,pageNum,layer);
+}
+
+function createTextBoxOverlay(obj,pageNum,layer){
+  const wrap=document.createElement('div');
+  wrap.className='custom-textbox';
+  wrap._tbObj=obj; // BUG FIX: store reference for undo matching
+  wrap.style.left=obj.x+'px';wrap.style.top=obj.y+'px';
+  wrap.style.width=obj.w+'px';
+
+  const ctrl=document.createElement('div');
+  ctrl.className='tb-controls';
+
+  const fontSel=document.createElement('select');
+  fontSel.className='tc-select';
+  FONTS.forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f;if(f===obj.fontFamily)o.selected=true;fontSel.appendChild(o);});
+  fontSel.onchange=()=>{obj.fontFamily=fontSel.value;applyStyle();};
+  ctrl.appendChild(fontSel);
+
+  const sizeSel=document.createElement('select');
+  sizeSel.className='tc-select';sizeSel.style.maxWidth='55px';
+  [8,10,12,14,16,18,20,24,28,32,36,42,48,56,64,72].forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;if(s===obj.fontSize)o.selected=true;sizeSel.appendChild(o);});
+  sizeSel.onchange=()=>{obj.fontSize=parseInt(sizeSel.value);applyStyle();};
+  ctrl.appendChild(sizeSel);
+
+  const div1=document.createElement('div');div1.className='tc-divider';ctrl.appendChild(div1);
+
+  const boldBtn=makeCtrlBtn('B','bold',obj.bold,()=>{obj.bold=!obj.bold;boldBtn.classList.toggle('on',obj.bold);applyStyle();});
+  boldBtn.style.fontWeight='bold';ctrl.appendChild(boldBtn);
+  const italicBtn=makeCtrlBtn('I','italic',obj.italic,()=>{obj.italic=!obj.italic;italicBtn.classList.toggle('on',obj.italic);applyStyle();});
+  italicBtn.style.fontStyle='italic';ctrl.appendChild(italicBtn);
+  const ulBtn=makeCtrlBtn('U','underline',obj.underline,()=>{obj.underline=!obj.underline;ulBtn.classList.toggle('on',obj.underline);applyStyle();});
+  ulBtn.style.textDecoration='underline';ctrl.appendChild(ulBtn);
+
+  const div2=document.createElement('div');div2.className='tc-divider';ctrl.appendChild(div2);
+
+  const txtColorLabel=document.createElement('span');txtColorLabel.style.cssText='font-size:11px;color:#666';txtColorLabel.textContent='A';
+  const txtColor=document.createElement('input');
+  txtColor.type='color';txtColor.className='tc-color';txtColor.value=obj.color;
+  txtColor.onchange=()=>{obj.color=txtColor.value;applyStyle();};
+  const div3=document.createElement('div');div3.className='tc-divider';ctrl.appendChild(div3);
+  ctrl.appendChild(txtColorLabel);ctrl.appendChild(txtColor);
+
+  const bgLabel=document.createElement('span');bgLabel.style.cssText='font-size:11px;color:#666';bgLabel.textContent='BG';
+  const bgColor=document.createElement('input');
+  bgColor.type='color';bgColor.className='tc-color';
+  bgColor.value=obj.bgColor==='transparent'?'#ffffff':obj.bgColor;
+  bgColor.onchange=()=>{obj.bgColor=bgColor.value;applyStyle();};
+  const bgClearBtn=makeCtrlBtn('✕ BG','',false,()=>{obj.bgColor='transparent';content.style.background='transparent';});
+  ctrl.appendChild(bgLabel);ctrl.appendChild(bgColor);ctrl.appendChild(bgClearBtn);
+
+  wrap.appendChild(ctrl);
+
+  const content=document.createElement('div');
+  content.className='tb-content';
+  content.contentEditable='true';
+  content.textContent=obj.text;
+  content.style.fontFamily=obj.fontFamily;
+  content.style.fontSize=obj.fontSize+'px';
+  content.style.fontWeight=obj.bold?'bold':'normal';
+  content.style.fontStyle=obj.italic?'italic':'normal';
+  content.style.textDecoration=obj.underline?'underline':'none';
+  content.style.color=obj.color;
+  content.style.background=obj.bgColor;
+  content.style.border='1px dashed #4361ee';
+  content.style.borderRadius='3px';
+  content.oninput=()=>{obj.text=content.innerText;};
+  content.onfocus=()=>{content.style.border='1.5px solid #4361ee';ctrl.classList.add('visible');};
+  content.onblur=()=>{
+    setTimeout(()=>{
+      if(!wrap.contains(document.activeElement)){ctrl.classList.remove('visible');content.style.border='1px dashed #aaa';}
+    },150);
+    obj.text=content.innerText;
+  };
+  wrap.appendChild(content);
+
+  function applyStyle(){
+    content.style.fontFamily=obj.fontFamily;
+    content.style.fontSize=obj.fontSize+'px';
+    content.style.fontWeight=obj.bold?'bold':'normal';
+    content.style.fontStyle=obj.italic?'italic':'normal';
+    content.style.textDecoration=obj.underline?'underline':'none';
+    content.style.color=obj.color;
+    content.style.background=obj.bgColor;
+  }
+
+  const delBtn=document.createElement('button');
+  delBtn.className='tb-del';delBtn.textContent='✕';
+  delBtn.onclick=e=>{
+    e.stopPropagation();
+    // BUG FIX: was pushing addTextBox instead of deleteTextBox
+    undoStack.push({action:'deleteTextBox',pageNum,obj});
+    wrap.remove();
+    if(pageTextBoxes[pageNum]) pageTextBoxes[pageNum]=pageTextBoxes[pageNum].filter(o2=>o2!==obj);
+  };
+  wrap.appendChild(delBtn);
+
+  const resizeH=document.createElement('div');
+  resizeH.className='tb-resize';
+  resizeH.addEventListener('mousedown',e=>{
+    e.stopPropagation();e.preventDefault();
+    const startX=e.clientX,startW=wrap.offsetWidth;
+    function onMove(e){const newW=Math.max(80,startW+(e.clientX-startX));wrap.style.width=newW+'px';obj.w=newW;}
+    function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  });
+  wrap.appendChild(resizeH);
+
+  wrap.addEventListener('mousedown',e=>{
+    if(e.target===content||e.target===resizeH||e.target===delBtn||e.target.closest('.tb-controls'))return;
+    e.preventDefault();
+    const startX=e.clientX,startY=e.clientY;
+    const startL=parseInt(wrap.style.left),startT=parseInt(wrap.style.top);
+    function onMove(e){
+      wrap.style.left=(startL+(e.clientX-startX))+'px';
+      wrap.style.top=(startT+(e.clientY-startY))+'px';
+      obj.x=parseInt(wrap.style.left);obj.y=parseInt(wrap.style.top);
+    }
+    function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  });
+
+  layer.appendChild(wrap);
+}
+
+function makeCtrlBtn(label,title,active,onClick){
+  const btn=document.createElement('button');
+  btn.className='tc-btn'+(active?' on':'');
+  btn.textContent=label;btn.title=title;
+  btn.onclick=onClick;
+  return btn;
+}
+
+// ===== IMAGE =====
+function startImageAdd(input){
+  if(!input.files[0])return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    pendingImgSrc=ev.target.result;
+    const tmp=new Image();
+    tmp.onload=()=>{
+      pendingImgNW=tmp.naturalWidth;pendingImgNH=tmp.naturalHeight;
+      addingImage=true;addingText=false;addingShape=false;
+      document.getElementById('img-cursor-img').src=pendingImgSrc;
+      document.getElementById('img-cursor').style.display='block';
+      document.body.style.cursor='crosshair';
+      setStatus('Page pe click karein jahan image rakhni hai — ESC se cancel','blue');
+    };
+    tmp.src=ev.target.result;
+  };
+  r.readAsDataURL(input.files[0]);
+  input.value='';
+}
+function stopImageMode(){
+  addingImage=false;pendingImgSrc=null;
+  document.getElementById('img-cursor').style.display='none';
+  document.body.style.cursor='default';
+}
+function placeImage(pageNum,x,y,pw,layer){
+  const dw=150,dh=Math.round(150*pendingImgNH/pendingImgNW);
+  if(!pageImages[pageNum])pageImages[pageNum]=[];
+  const obj={src:pendingImgSrc,x:x-dw/2,y:y-dh/2,w:dw,h:dh};
+  pageImages[pageNum].push(obj);
+  undoStack.push({action:'addImage',pageNum,obj});
+  createImageOverlay(obj.src,obj.x,obj.y,obj.w,obj.h,pageNum,layer,obj);
+}
+
+function createImageOverlay(src,x,y,w,h,pageNum,layer,imgObj){
+  const overlay=document.createElement('div');
+  overlay.className='img-overlay';
+  overlay._imgObj=imgObj; // BUG FIX: store reference for undo matching
+  overlay.style.left=x+'px';overlay.style.top=y+'px';
+  overlay.style.width=w+'px';overlay.style.height=h+'px';
+
+  const img=document.createElement('img');img.src=src;overlay.appendChild(img);
+
+  const delBtn=document.createElement('button');
+  delBtn.className='del-handle';delBtn.textContent='✕';
+  delBtn.onclick=e=>{
+    e.stopPropagation();
+    // BUG FIX: image delete was not pushing to undoStack
+    undoStack.push({action:'deleteImage',pageNum,obj:imgObj});
+    overlay.remove();
+    if(imgObj&&pageImages[pageNum]) pageImages[pageNum]=pageImages[pageNum].filter(o=>o!==imgObj);
+  };
+  overlay.appendChild(delBtn);
+
+  ['tl','tr','bl','br'].forEach(pos=>{
+    const handle=document.createElement('div');
+    handle.className='resize-handle '+pos;
+    handle.addEventListener('mousedown',e=>{
+      e.stopPropagation();e.preventDefault();
+      const startX=e.clientX,startY=e.clientY,startW=overlay.offsetWidth,startH=overlay.offsetHeight;
+      const startL=parseInt(overlay.style.left),startT=parseInt(overlay.style.top),ratio=startH/startW;
+      function onMove(e){
+        const dx=e.clientX-startX,dy=e.clientY-startY;
+        let nW=startW,nH=startH,nL=startL,nT=startT;
+        if(pos==='br'){nW=Math.max(40,startW+dx);nH=Math.round(nW*ratio);}
+        else if(pos==='bl'){nW=Math.max(40,startW-dx);nH=Math.round(nW*ratio);nL=startL+startW-nW;}
+        else if(pos==='tr'){nW=Math.max(40,startW+dx);nH=Math.round(nW*ratio);nT=startT+startH-nH;}
+        else if(pos==='tl'){nW=Math.max(40,startW-dx);nH=Math.round(nW*ratio);nL=startL+startW-nW;nT=startT+startH-nH;}
+        overlay.style.width=nW+'px';overlay.style.height=nH+'px';
+        overlay.style.left=nL+'px';overlay.style.top=nT+'px';
+        if(imgObj){imgObj.x=nL;imgObj.y=nT;imgObj.w=nW;imgObj.h=nH;}
+      }
+      function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
+      document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+    });
+    overlay.appendChild(handle);
+  });
+
+  overlay.addEventListener('mousedown',e=>{
+    if(e.target.classList.contains('resize-handle')||e.target.classList.contains('del-handle'))return;
+    e.preventDefault();
+    const startX=e.clientX,startY=e.clientY;
+    const startL=parseInt(overlay.style.left),startT=parseInt(overlay.style.top);
+    function onMove(e){
+      overlay.style.left=(startL+(e.clientX-startX))+'px';
+      overlay.style.top=(startT+(e.clientY-startY))+'px';
+      if(imgObj){imgObj.x=parseInt(overlay.style.left);imgObj.y=parseInt(overlay.style.top);}
+    }
+    function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);}
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  });
+
+  layer.appendChild(overlay);
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){stopImageMode();stopTextMode();stopShapeMode();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undoAction();}
+});
+document.addEventListener('mousemove',e=>{
+  if(addingImage){const c=document.getElementById('img-cursor');c.style.left=(e.clientX+12)+'px';c.style.top=(e.clientY+12)+'px';}
+  if(addingText){const c=document.getElementById('txt-cursor');c.style.left=(e.clientX+12)+'px';c.style.top=(e.clientY+12)+'px';}
+  if(addingShape){const c=document.getElementById('shape-cursor');c.style.left=(e.clientX+12)+'px';c.style.top=(e.clientY+12)+'px';}
+});
+
+// ===== PAGE OPS =====
+async function deletePage(pageNum){
+  if(totalPages<=1){alert('Sirf ek page hai!');return;}
+  if(!confirm('Page '+pageNum+' delete karna chahte ho?'))return;
+  setStatus('Deleting...','blue');
+  try{
+    const res=await fetch('/delete-page',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pdfBase64:originalPDFBase64,pageNum})});
+    const data=await res.json();
+    if(data.error)throw new Error(data.error);
+    originalPDFBase64=data.pdfBase64;totalPages=data.pageCount;
+    pdfDoc=await pdfjsLib.getDocument({data:Uint8Array.from(atob(data.pdfBase64),c=>c.charCodeAt(0))}).promise;
+    allEdits={};pageBlocks={};pageAngles={};pageImages={};pageTextBoxes={};pageShapes={};undoStack=[];
+    await renderAllPages();setStatus('✅ Page deleted!','green');
+  }catch(e){setStatus('Error: '+e.message,'red');}
+}
+
+async function rotatePage(pageNum,angle){
+  pageAngles[pageNum]=((pageAngles[pageNum]||0)+angle+360)%360;
+  try{
+    const imgRes=await fetch('/get-page-image',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pdfBase64:originalPDFBase64,pageNum,angle:pageAngles[pageNum]})});
+    const imgData=await imgRes.json();
+    document.getElementById('img-'+pageNum).src='data:image/png;base64,'+imgData.image;
+    // BUG FIX: re-render text boxes after rotate to fix position
+    const layer=document.getElementById('layer-'+pageNum);
+    const bgImg=document.getElementById('img-'+pageNum);
+    if(layer&&bgImg){
+      layer.querySelectorAll('.edit-box').forEach(b=>b.remove());
+      const textRes=await fetch('/get-text',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pdfBase64:originalPDFBase64,pageNum,angle:pageAngles[pageNum]})});
+      const textData=await textRes.json();
+      const blocks=textData.blocks||[];
+      pageBlocks[pageNum]=blocks;
+      const pdfW=textData.pageWidth,pdfH=textData.pageHeight;
+      const displayW=bgImg.clientWidth,displayH=bgImg.clientHeight;
+      const scaleX=displayW/pdfW,scaleY=displayH/pdfH;
+      blocks.forEach((b,idx)=>{
+        const x=b.x*scaleX,y=b.y*scaleY;
+        const w=(b.x1-b.x)*scaleX,h=(b.y1-b.y)*scaleY;
+        const fs=b.size*scaleY;
+        const box=document.createElement('input');
+        box.type='text';box.className='edit-box';
+        box.value=b.text;box.dataset.orig=b.text;box.dataset.idx=idx;box.dataset.w=w;
+        box.style.left=x+'px';box.style.top=(y+1)+'px';
+        box.style.width=Math.max(w+2,20)+'px';box.style.height=Math.max(h-2,8)+'px';
+        box.style.fontSize=fs+'px';box.style.fontWeight=b.bold?'bold':'normal';
+        const rc=Math.round(b.color[0]*255),gc=Math.round(b.color[1]*255),bc2=Math.round(b.color[2]*255);
+        box.style.color='rgb('+rc+','+gc+','+bc2+')';
+        box.addEventListener('blur',()=>{
+          box.style.width=Math.max(parseFloat(box.dataset.w)+2,20)+'px';
+          box.style.overflow='hidden';
+          allEdits[pageNum]=allEdits[pageNum]||{};
+          allEdits[pageNum][idx]=box.value;
+        });
+        layer.appendChild(box);
+      });
+    }
+    setStatus('✅ Rotated!','green');
+  }catch(e){setStatus('Error: '+e.message,'red');}
+}
+
+function insertPageAfter(pageNum){
+  const input=document.createElement('input');input.type='file';input.accept='application/pdf';
+  input.onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    setStatus('Inserting...','blue');
+    const r=new FileReader();
+    r.onload=async ev=>{
+      const bytes=new Uint8Array(ev.target.result);
+      let b64='';const chunk=1024;
+      for(let i=0;i<bytes.length;i+=chunk){b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));}
+      try{
+        const res=await fetch('/insert-page',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({pdfBase64:originalPDFBase64,newPdfBase64:btoa(b64),afterPage:pageNum})});
+        const data=await res.json();
+        if(data.error)throw new Error(data.error);
+        originalPDFBase64=data.pdfBase64;totalPages=data.pageCount;
+        pdfDoc=await pdfjsLib.getDocument({data:Uint8Array.from(atob(data.pdfBase64),c=>c.charCodeAt(0))}).promise;
+        allEdits={};pageBlocks={};pageAngles={};pageImages={};pageTextBoxes={};pageShapes={};undoStack=[];
+        await renderAllPages();setStatus('✅ Page inserted!','green');
+      }catch(e){setStatus('Error: '+e.message,'red');}
+    };r.readAsArrayBuffer(f);
+  };input.click();
+}
+
+// ===== DOWNLOAD =====
+async function downloadPDF(){
+  setStatus('Preparing PDF...','blue');
+  try{
+    let currentB64=originalPDFBase64;
+    for(let pageNum=1;pageNum<=totalPages;pageNum++){
+      const blocks=pageBlocks[pageNum]||[];
+      const edits=[];
+      const layer=document.getElementById('layer-'+pageNum);
+      if(!layer)continue;
+      layer.querySelectorAll('.edit-box').forEach(box=>{
+        const idx=parseInt(box.dataset.idx);
+        const b=blocks[idx];if(!b)return;
+        edits.push({x:b.x,y:b.y,x1:b.x1,y1:b.y1,size:b.size,text:box.value,orig:b.text,
+          bold:b.bold,color:b.color,font:b.font,changed:box.value!==box.dataset.orig});
+      });
+      const imgs=pageImages[pageNum]||[];
+      const txtBoxes=pageTextBoxes[pageNum]||[];
+      const shapes=pageShapes[pageNum]||[];
+      const bgImg=document.getElementById('img-'+pageNum);
+      const displayW=bgImg?bgImg.clientWidth:1;
+      const displayH=bgImg?bgImg.clientHeight:1;
+      if(edits.some(e=>e.changed)||imgs.length>0||txtBoxes.length>0||shapes.length>0){
+        const res=await fetch('/save-pdf',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({pdfBase64:currentB64,edits,pageNum,images:imgs,
+            textBoxes:txtBoxes,shapes,displayW,displayH})});
+        const blob=await res.blob();
+        const arr=await blob.arrayBuffer();
+        const bytes=new Uint8Array(arr);
+        let b64='';const chunk=1024;
+        for(let i=0;i<bytes.length;i+=chunk){b64+=String.fromCharCode(...bytes.subarray(i,i+chunk));}
+        currentB64=btoa(b64);
+      }
+    }
+    const binStr=atob(currentB64);
+    const bytes=new Uint8Array(binStr.length);
+    for(let i=0;i<binStr.length;i++)bytes[i]=binStr.charCodeAt(i);
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='edited.pdf';a.click();
+    URL.revokeObjectURL(url);
+    setStatus('✅ Downloaded!','green');
+  }catch(e){setStatus('Error: '+e.message,'red');}
+}
+</script>
+</body>
+</html>
